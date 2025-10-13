@@ -5,12 +5,23 @@ const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
 const { body, validationResult } = require('express-validator');
+require("@shopify/shopify-api/adapters/node")
+const { shopifyApi, ApiVersion, Session } = require("@shopify/shopify-api");
 // const { completeDraftOrder, createDraftOrder } = require('./shopifyOrders');
 const {createDraftOrder} = require("./demo.js");  
 const {completeDraftOrder} = require("./draftorder.js");
 const Razorpay = require('razorpay');
-const { loadProcessedWebhooks, saveProcessedWebhooks } = require("./utils/webhookStore.js");
+const { loadProcessedWebhooks, saveProcessedWebhooks, loadOrderId, saveOrderId} = require("./utils/webhookStore.js");
 require('dotenv').config();
+
+  const shopify = shopifyApi({
+  apiKey: process.env.SHOPIFY_API_KEY,
+  apiSecretKey: process.env.SHOPIFY_SECRET,
+  hostName: process.env.SHOP.replace(/https?:\/\//, "").replace(/\/$/, ""),
+  adminApiAccessToken: process.env.SHOPIFY_TOKEN,
+  isCustomStoreApp: true,
+  apiVersion: ApiVersion.July24,
+});
 
 
 
@@ -39,8 +50,6 @@ const razorpay = new Razorpay({
 });
 
 // Body parser for most routes
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
 
 // Raw body for webhook signature verification
 app.use(
@@ -51,6 +60,8 @@ app.use(
     },
   })
 );
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
@@ -212,9 +223,21 @@ app.post('/complete-order', async (req, res) => {
       return res.status(400).send('Missing draft order ID');
     }
 
+     const shop = process.env.SHOP.replace(/https?:\/\//, "").replace(/\/$/, "");
+    const session = new Session({
+      id: `custom-session-${Date.now()}`,
+      shop,
+      state: "active",
+      isOnline: false,
+      accessToken: process.env.SHOPIFY_TOKEN,
+    });
+    const client = new shopify.clients.Rest({ session });
+
+
     // Complete the draft order
-    await completeDraftOrder(draftOrderId, { 
+    const data = await completeDraftOrder(client,draftOrderId, { 
       paymentPending: false,
+      sendReceipt: true,
       paymentId: paymentId,
       paymentMethod: 'Razorpay'
     });
@@ -230,12 +253,38 @@ app.post('/complete-order', async (req, res) => {
     }
 
     saveProcessedWebhooks(processedWebhooks); 
+    console.log('Saving order ID:', paymentId, data.orderId);
+    saveOrderId(paymentId, data.orderId);
 
     console.log(`Order ${draftOrderId} completed successfully`);
     return res.status(200).send('Order completed successfully');
   } catch (err) {
     console.error('Webhook handling error:', err);
     return res.status(500).send('Internal Server Error');
+  }
+});
+
+
+app.post("/order-status/:paymentId", (req, res) => {
+  console.log('enterd order status', req.params.paymentId);
+  try {
+    const { paymentId } = req.params;
+
+    if (!paymentId) {
+      return res.status(400).json({ error: "Payment ID is required" });
+    }
+
+    const orderId = loadOrderId(paymentId);
+      console.log('loaded order id', orderId);
+
+    if (!orderId) {
+      return res.status(200).json({ found: false, orderId: null });
+    }
+
+    return res.status(200).json({ found: true, orderId });
+  } catch (err) {
+    console.error("❌ Error fetching order ID:", err);
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 

@@ -29,8 +29,10 @@ export function saveOrderId(paymentId, orderId) {
   try {
     let data = {};
     if (fs.existsSync(OrderID_Path)) {
+      console.log('file exists');
       data = JSON.parse(fs.readFileSync(OrderID_Path, "utf-8"));
     }
+    console.log('1', paymentId, orderId);
 
     // Add/update the new order
     data[paymentId] = orderId;
@@ -45,6 +47,7 @@ export function saveOrderId(paymentId, orderId) {
       });
       data = newData;
     }
+    console.log('2', data);
 
     fs.writeFileSync(OrderID_Path, JSON.stringify(data, null, 2), "utf-8");
   } catch (err) {

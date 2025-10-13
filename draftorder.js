@@ -84,19 +84,20 @@ async function sendDraftInvoice(client, draftOrderId, toEmail) {
   console.log("Invoice send result:", res.body);  
 };
 
-  async function completeDraftOrder(client, draftOrderId, { paymentPending = true } = {}) {
-  console.log("Completing draft order:", draftOrderId, "payment_pending:", paymentPending);
+  async function completeDraftOrder(client, draftOrderId, { paymentPending = true,sendReceipt = true  } = {}) {
+  // console.log("Completing draft order:", draftOrderId, "payment_pending:", paymentPending);
   
   try {
     const res = await client.put({
       path: `draft_orders/${draftOrderId}/complete`,
       type: "application/json",
       data: {
-        payment_pending: paymentPending
+        payment_pending: paymentPending,
+         send_receipt: sendReceipt
       }
     });
 
-    console.log("Draft order completed successfully:", res.body.draft_order);
+    console.log("Draft order completed successfully:",res, res.body.draft_order);
     
     // The completed draft order will have an order_id
     const completedDraft = res.body.draft_order;
@@ -224,4 +225,4 @@ async function recordManualPayment(client, orderId, amount) {
 //   }
 // })();
 
-module.export = {completeDraftOrder}
+module.exports = {completeDraftOrder}

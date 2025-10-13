@@ -1,10 +1,11 @@
 const express = require('express')
-const {createDraftOrder} = require('./demo')
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
-const { completeDraftOrder,completeDraftOrder } = require('./shopifyOrders');
+// const { completeDraftOrder,completeDraftOrder } = require('./shopifyOrders');
 const Razorpay = require('razorpay');
 require('dotenv').config();
+const  {createDraftOrder} = require("./demo.js");
+const {completeDraftOrder} = require("./draftorder.js");
 
 
 const app = express();
@@ -40,7 +41,7 @@ app.post('/create-razorpay-order', async (req, res) => {
       receipt: `draft_order_${draftOrderId}`,
       payment_capture: 1, // automatic capture
     };
-
+      
     const order = await razorpay.orders.create(options);
 
     res.status(201).json({ 
@@ -57,18 +58,18 @@ app.post('/create-razorpay-order', async (req, res) => {
 
 app.post('/create-draft-order', async (req, res) => {
   try {
-    const { items, customerInfo, note, tags } = req.body;
+    const { items, customerId, note, tags,shipping_address, } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Invalid items array' });
     }
 
-    if (!customerInfo || !customerInfo.email) {
-      return res.status(400).json({ error: 'Invalid customerInfo' });
+    if (!customerId ) {
+      return res.status(400).json({ error: 'no customer Id:' });
     }
 
     // Call your existing function
-    const draft = await createDraftOrder(items, customerInfo, note, tags);
+    const draft = await createDraftOrder(items, customerId,shipping_address,note, tags);
 
     if (!draft || !draft.id) {
       return res.status(500).json({ error: 'Failed to create draft order' });
@@ -81,8 +82,10 @@ app.post('/create-draft-order', async (req, res) => {
   }
 });
 
+let processedWebhooks = loadProcessedWebhooks();
+
 app.post('/complete-order', async (req, res) => {
-  const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+  const webhookSecret = process.env.RAZORPAY_KEY_SECRET;
   const signature = req.headers['x-razorpay-signature'];
 
   // Verify signature
@@ -101,7 +104,8 @@ app.post('/complete-order', async (req, res) => {
     // Example: store draftOrderId in metadata when creating Razorpay order
     const draftOrderId = payload.payload.payment.entity.notes.draftOrderId;
 
-    await completeDraftOrder(draftOrderId, { paymentPending: false });
+   const data = await completeDraftOrder(draftOrderId, { paymentPending: false });
+
 
     return res.status(200).send('Order completed successfully');
   } catch (err) {
