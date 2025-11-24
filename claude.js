@@ -12,6 +12,7 @@ const {createDraftOrder} = require("./demo.js");
 const {completeDraftOrder} = require("./draftorder.js");
 const Razorpay = require('razorpay');
 const { loadProcessedWebhooks, saveProcessedWebhooks, loadOrderId, saveOrderId} = require("./utils/webhookStore.js");
+const {countries} = require("./utils/countriesallowed.js");
 require('dotenv').config();
 
   const shopify = shopifyApi({
@@ -26,7 +27,7 @@ require('dotenv').config();
 
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3003;
 
 // Security middleware
 app.set('trust proxy', 1);
@@ -68,12 +69,24 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
+const supportedCurrencies = [
+  'INR', // India
+  'USD', // USA
+  'CAD', // Canada
+  'GBP', // UK
+  'EUR', // France, Germany
+  'AED', // UAE
+  'SAR', // Saudi Arabia
+  'JPY', // Japan
+  'NZD'  // New Zealand
+];
+
 // Create Razorpay Order
 app.post('/create-razorpay-order', 
   limiter,
   [
     body('amount').isFloat({ min: 1, max: 1000000 }).withMessage('Invalid amount'),
-    body('currency').isIn(['INR', 'USD']).withMessage('Invalid currency'),
+    body('currency').isIn(supportedCurrencies).withMessage('Invalid currency'),
     body('draftOrderId').notEmpty().withMessage('Draft order ID required')
   ],
   async (req, res) => {
@@ -146,6 +159,11 @@ app.post('/create-draft-order',
 
       console.log('dkehar verie ', items, customerInfo, note,shipping_address, tags,id )
 
+        if(countries[shipping_address.country] !== true){
+          return  res.status(400).json({ 
+            error: 'Country not allowed for order placement' 
+          });
+        }
       const draft = await createDraftOrder(items, id,customerInfo, shipping_address,note, tags);
 
       console.log("Draft order created:", draft);
