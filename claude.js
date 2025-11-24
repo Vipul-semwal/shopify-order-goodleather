@@ -78,7 +78,8 @@ const supportedCurrencies = [
   'AED', // UAE
   'SAR', // Saudi Arabia
   'JPY', // Japan
-  'NZD'  // New Zealand
+  'NZD',// New Zealand
+  "AUD",
 ];
 
 // Create Razorpay Order
